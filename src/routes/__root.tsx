@@ -90,10 +90,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Chat, review, and ship code with a multi-model AI agent that keeps you in control.",
+          "Codex Green is a production AI software engineering agent: connect a GitHub repo, chat with an AI, review diffs, and ship.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Codex Green — AI Coding Agent" },
+      { name: "twitter:description", content: "Codex Green is a production AI software engineering agent: connect a GitHub repo, chat with an AI, review diffs, and ship." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8c7ee63c-eb23-4d52-91fd-61e12a4c1a4c/id-preview-0a139634--13814cb6-c365-4ded-a0b8-426e49f04809.lovable.app-1784278978777.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8c7ee63c-eb23-4d52-91fd-61e12a4c1a4c/id-preview-0a139634--13814cb6-c365-4ded-a0b8-426e49f04809.lovable.app-1784278978777.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
