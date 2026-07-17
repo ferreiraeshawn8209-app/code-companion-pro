@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Github, Rocket, Save, Terminal } from "lucide-react";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { FileExplorer, type WsFile } from "@/components/workspace/FileExplorer";
+import { GithubImportDialog } from "@/components/workspace/GithubImportDialog";
 import { AI_PROVIDERS } from "@/lib/ai/providers";
 import type { UIMessage } from "ai";
 
@@ -217,6 +218,24 @@ function ProjectWorkspace() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <GithubImportDialog
+              projectId={id}
+              onImported={async () => {
+                const { data: fs } = await supabase
+                  .from("project_files")
+                  .select("id,path,language")
+                  .eq("project_id", id)
+                  .order("path");
+                setFiles(fs ?? []);
+                if (fs && fs.length > 0 && !activePath) setActivePath(fs[0].path);
+                const { data: p } = await supabase
+                  .from("projects")
+                  .select("id,name,description,github_repo_full_name,ai_model,ai_provider")
+                  .eq("id", id)
+                  .maybeSingle();
+                if (p) setProject(p);
+              }}
+            />
             <Select value={project.ai_model} onValueChange={updateModel}>
               <SelectTrigger className="w-[220px] h-8 font-mono text-xs">
                 <SelectValue />
