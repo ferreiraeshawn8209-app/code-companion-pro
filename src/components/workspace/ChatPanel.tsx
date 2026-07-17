@@ -59,7 +59,7 @@ export function ChatPanel({
       const { error } = await supabase.from("ai_messages").insert({
         session_id: sid,
         role: "assistant",
-        parts: message.parts,
+        parts: message.parts as unknown as never,
       });
       if (error) console.error("persist assistant:", error);
     },
