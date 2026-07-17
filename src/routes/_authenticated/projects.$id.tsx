@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Github, Rocket, Save, Terminal } from "lucide-react";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { FileExplorer, type WsFile } from "@/components/workspace/FileExplorer";
+import { GithubImportDialog } from "@/components/workspace/GithubImportDialog";
 import { AI_PROVIDERS } from "@/lib/ai/providers";
 import type { UIMessage } from "ai";
 
