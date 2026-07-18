@@ -194,9 +194,14 @@ export type Database = {
           github_repo_full_name: string | null
           id: string
           memory: Json
+          mobile_app_id: string | null
+          mobile_app_name: string | null
+          mobile_live_reload: boolean
           name: string
           owner_id: string
           updated_at: string
+          vercel_project_id: string | null
+          vercel_project_name: string | null
         }
         Insert: {
           ai_model?: string
@@ -207,9 +212,14 @@ export type Database = {
           github_repo_full_name?: string | null
           id?: string
           memory?: Json
+          mobile_app_id?: string | null
+          mobile_app_name?: string | null
+          mobile_live_reload?: boolean
           name: string
           owner_id: string
           updated_at?: string
+          vercel_project_id?: string | null
+          vercel_project_name?: string | null
         }
         Update: {
           ai_model?: string
@@ -220,9 +230,14 @@ export type Database = {
           github_repo_full_name?: string | null
           id?: string
           memory?: Json
+          mobile_app_id?: string | null
+          mobile_app_name?: string | null
+          mobile_live_reload?: boolean
           name?: string
           owner_id?: string
           updated_at?: string
+          vercel_project_id?: string | null
+          vercel_project_name?: string | null
         }
         Relationships: []
       }
@@ -246,6 +261,59 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      vercel_deployments: {
+        Row: {
+          created_at: string
+          deployment_id: string | null
+          deployment_url: string | null
+          id: string
+          meta: Json
+          project_id: string
+          state: string
+          target: string
+          updated_at: string
+          user_id: string
+          vercel_project_id: string | null
+          vercel_project_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          deployment_id?: string | null
+          deployment_url?: string | null
+          id?: string
+          meta?: Json
+          project_id: string
+          state?: string
+          target?: string
+          updated_at?: string
+          user_id: string
+          vercel_project_id?: string | null
+          vercel_project_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          deployment_id?: string | null
+          deployment_url?: string | null
+          id?: string
+          meta?: Json
+          project_id?: string
+          state?: string
+          target?: string
+          updated_at?: string
+          user_id?: string
+          vercel_project_id?: string | null
+          vercel_project_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vercel_deployments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

@@ -7,10 +7,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Github, Rocket, Save, Terminal } from "lucide-react";
+import { ArrowLeft, Github, Save, Terminal } from "lucide-react";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { FileExplorer, type WsFile } from "@/components/workspace/FileExplorer";
 import { GithubImportDialog } from "@/components/workspace/GithubImportDialog";
+import { DeployPanel } from "@/components/workspace/DeployPanel";
+import { MobilePanel } from "@/components/workspace/MobilePanel";
 import { AI_PROVIDERS } from "@/lib/ai/providers";
 import type { UIMessage } from "ai";
 
@@ -25,7 +27,14 @@ type Project = {
   github_repo_full_name: string | null;
   ai_model: string;
   ai_provider: string;
+  vercel_project_name: string | null;
+  mobile_app_id: string | null;
+  mobile_app_name: string | null;
+  mobile_live_reload: boolean;
 };
+
+const PROJECT_COLS =
+  "id,name,description,github_repo_full_name,ai_model,ai_provider,vercel_project_name,mobile_app_id,mobile_app_name,mobile_live_reload";
 
 function languageFromPath(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase();
@@ -58,7 +67,7 @@ function ProjectWorkspace() {
       setLoading(true);
       const { data: p, error } = await supabase
         .from("projects")
-        .select("id,name,description,github_repo_full_name,ai_model,ai_provider")
+        .select(PROJECT_COLS)
         .eq("id", id)
         .maybeSingle();
       if (error || !p) {
@@ -230,7 +239,7 @@ function ProjectWorkspace() {
                 if (fs && fs.length > 0 && !activePath) setActivePath(fs[0].path);
                 const { data: p } = await supabase
                   .from("projects")
-                  .select("id,name,description,github_repo_full_name,ai_model,ai_provider")
+                  .select(PROJECT_COLS)
                   .eq("id", id)
                   .maybeSingle();
                 if (p) setProject(p);
@@ -256,6 +265,7 @@ function ProjectWorkspace() {
         <TabsList className="mx-4 mt-2 font-mono text-xs w-fit">
           <TabsTrigger value="workspace">workspace</TabsTrigger>
           <TabsTrigger value="deploy">deploy</TabsTrigger>
+          <TabsTrigger value="mobile">mobile</TabsTrigger>
           <TabsTrigger value="audit">audit log</TabsTrigger>
         </TabsList>
 
@@ -340,15 +350,22 @@ function ProjectWorkspace() {
         </TabsContent>
 
         <TabsContent value="deploy" className="mx-4 mb-4 flex-1 overflow-auto">
-          <div className="rounded-md border border-dashed border-border p-16 text-center">
-            <Rocket className="h-8 w-8 text-primary mx-auto" />
-            <div className="mt-4 font-mono text-sm">deployment provider</div>
-            <p className="mt-2 text-xs text-muted-foreground max-w-md mx-auto">
-              Vercel, Cloudflare, and self-host targets arrive in Phase 3.
-              You'll deploy production/preview builds with log streaming and AI-suggested fixes on failure.
-            </p>
-            <Button disabled className="mt-4 font-mono">$ connect vercel — soon</Button>
-          </div>
+          <DeployPanel
+            projectId={id}
+            projectName={project.name}
+            vercelProjectName={project.vercel_project_name}
+            onLinked={(name) => setProject({ ...project, vercel_project_name: name })}
+          />
+        </TabsContent>
+
+        <TabsContent value="mobile" className="mx-4 mb-4 flex-1 overflow-auto">
+          <MobilePanel
+            projectId={id}
+            projectName={project.name}
+            initialAppId={project.mobile_app_id}
+            initialAppName={project.mobile_app_name}
+            initialLiveReload={project.mobile_live_reload}
+          />
         </TabsContent>
 
         <TabsContent value="audit" className="mx-4 mb-4 flex-1 overflow-auto">
