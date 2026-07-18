@@ -7,10 +7,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Github, Rocket, Save, Terminal } from "lucide-react";
+import { ArrowLeft, Github, Save, Terminal } from "lucide-react";
 import { ChatPanel } from "@/components/workspace/ChatPanel";
 import { FileExplorer, type WsFile } from "@/components/workspace/FileExplorer";
 import { GithubImportDialog } from "@/components/workspace/GithubImportDialog";
+import { DeployPanel } from "@/components/workspace/DeployPanel";
+import { MobilePanel } from "@/components/workspace/MobilePanel";
 import { AI_PROVIDERS } from "@/lib/ai/providers";
 import type { UIMessage } from "ai";
 
@@ -25,7 +27,14 @@ type Project = {
   github_repo_full_name: string | null;
   ai_model: string;
   ai_provider: string;
+  vercel_project_name: string | null;
+  mobile_app_id: string | null;
+  mobile_app_name: string | null;
+  mobile_live_reload: boolean;
 };
+
+const PROJECT_COLS =
+  "id,name,description,github_repo_full_name,ai_model,ai_provider,vercel_project_name,mobile_app_id,mobile_app_name,mobile_live_reload";
 
 function languageFromPath(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase();
