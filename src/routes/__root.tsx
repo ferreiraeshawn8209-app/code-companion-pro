@@ -79,25 +79,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Codex Green — AI Coding Agent" },
+      { title: "spok — AI coding agent" },
       {
         name: "description",
         content:
-          "Codex Green is a production AI software engineering agent: connect a GitHub repo, chat with an AI, review diffs, and ship.",
+          "spok is a production AI software engineering agent: voice or text chat, connect a repo, review diffs, deploy to Vercel.",
       },
-      { name: "author", content: "Codex Green" },
-      { property: "og:title", content: "Codex Green — AI Coding Agent" },
+      { name: "author", content: "spok" },
+      { property: "og:title", content: "spok — AI coding agent" },
       {
         property: "og:description",
         content:
-          "Codex Green is a production AI software engineering agent: connect a GitHub repo, chat with an AI, review diffs, and ship.",
+          "spok is a production AI software engineering agent: voice or text chat, connect a repo, review diffs, deploy to Vercel.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Codex Green — AI Coding Agent" },
-      { name: "twitter:description", content: "Codex Green is a production AI software engineering agent: connect a GitHub repo, chat with an AI, review diffs, and ship." },
+      { name: "twitter:title", content: "spok — AI coding agent" },
+      { name: "twitter:description", content: "spok is a production AI software engineering agent: voice or text chat, connect a repo, review diffs, deploy to Vercel." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8c7ee63c-eb23-4d52-91fd-61e12a4c1a4c/id-preview-0a139634--13814cb6-c365-4ded-a0b8-426e49f04809.lovable.app-1784278978777.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8c7ee63c-eb23-4d52-91fd-61e12a4c1a4c/id-preview-0a139634--13814cb6-c365-4ded-a0b8-426e49f04809.lovable.app-1784278978777.png" },
+
     ],
     links: [
       { rel: "stylesheet", href: appCss },
