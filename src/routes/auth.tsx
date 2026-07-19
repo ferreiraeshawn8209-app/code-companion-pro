@@ -12,10 +12,11 @@ import { Terminal } from "lucide-react";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — Codex Green" },
-      { name: "description", content: "Access your Codex Green console." },
+      { title: "Sign in — spok" },
+      { name: "description", content: "Access your spok console." },
     ],
   }),
+
   component: AuthPage,
 });
 
@@ -53,8 +54,9 @@ function AuthPage() {
     setLoading(true);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: `${window.location.origin}/auth`,
       });
+
       if (result.error) throw result.error;
       if (result.redirected) return;
       navigate({ to: "/dashboard" });
@@ -69,8 +71,9 @@ function AuthPage() {
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 font-mono text-primary text-glow mb-8">
           <Terminal className="h-5 w-5" />
-          codex.green
+          spok
         </Link>
+
         <div className="rounded-lg border border-border bg-card p-6">
           <div className="mb-6 text-center">
             <div className="font-mono text-xs text-primary">$ auth --login</div>

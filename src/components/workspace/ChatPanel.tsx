@@ -1,9 +1,9 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Loader2, Bot, User, StopCircle } from "lucide-react";
+import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -22,6 +22,112 @@ interface ChatPanelProps {
   initialMessages: UIMessage[];
 }
 
+// ---- WAV encoder (16-bit PCM mono, downsampled to 16kHz) ------------------
+function encodeWav(chunks: Float32Array[], sampleRate: number): Blob {
+  const flat = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+  let o = 0;
+  for (const c of chunks) {
+    flat.set(c, o);
+    o += c.length;
+  }
+  const targetRate = 16000;
+  const ratio = sampleRate / targetRate;
+  const outLen = Math.floor(flat.length / ratio);
+  const down = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) down[i] = flat[Math.floor(i * ratio)];
+
+  const buf = new ArrayBuffer(44 + down.length * 2);
+  const view = new DataView(buf);
+  const w = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+  w(0, "RIFF");
+  view.setUint32(4, 36 + down.length * 2, true);
+  w(8, "WAVE");
+  w(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, targetRate, true);
+  view.setUint32(28, targetRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  w(36, "data");
+  view.setUint32(40, down.length * 2, true);
+  let p = 44;
+  for (let i = 0; i < down.length; i++) {
+    const s = Math.max(-1, Math.min(1, down[i]));
+    view.setInt16(p, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    p += 2;
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+// ---- PCM streaming playback (24kHz mono s16le) ----------------------------
+async function playTtsStream(text: string, ctxRef: React.MutableRefObject<AudioContext | null>) {
+  const res = await fetch("/api/public/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`tts ${res.status}`);
+  }
+  if (!ctxRef.current) ctxRef.current = new AudioContext({ sampleRate: 24000 });
+  const ctx = ctxRef.current;
+  if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+
+  let playhead = 0;
+  let pending = new Uint8Array(0);
+
+  const schedule = (incoming: Uint8Array) => {
+    const bytes = new Uint8Array(pending.length + incoming.length);
+    bytes.set(pending);
+    bytes.set(incoming, pending.length);
+    const usable = bytes.length - (bytes.length % 2);
+    pending = bytes.slice(usable);
+    if (usable === 0) return;
+    const samples = new Int16Array(bytes.buffer.slice(0, usable));
+    const floats = Float32Array.from(samples, (s) => s / 32768);
+    const buffer = ctx.createBuffer(1, floats.length, 24000);
+    buffer.copyToChannel(floats, 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    if (playhead === 0) playhead = ctx.currentTime + 0.05;
+    else playhead = Math.max(playhead, ctx.currentTime);
+    src.start(playhead);
+    playhead += buffer.duration;
+  };
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let carry = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    carry += value;
+    const lines = carry.split("\n");
+    carry = lines.pop() ?? "";
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const evt = JSON.parse(payload);
+        if (evt.type === "speech.audio.delta" && evt.audio) {
+          const bin = atob(evt.audio);
+          const arr = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          schedule(arr);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 export function ChatPanel({
   projectId,
   projectName,
@@ -33,9 +139,20 @@ export function ChatPanel({
   initialMessages,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceReply, setVoiceReply] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentSessionRef = useRef<string | null>(sessionId);
   currentSessionRef.current = sessionId;
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const recRef = useRef<{
+    stream: MediaStream;
+    ctx: AudioContext;
+    src: MediaStreamAudioSourceNode;
+    node: ScriptProcessorNode;
+    chunks: Float32Array[];
+  } | null>(null);
 
   const { messages, sendMessage, status, stop, setMessages } = useChat({
     id: sessionId ?? "pending",
@@ -53,15 +170,24 @@ export function ChatPanel({
     }),
     onError: (err) => toast.error(err.message ?? "chat error"),
     onFinish: async ({ message }) => {
-      // Persist the assistant message
       const sid = currentSessionRef.current;
-      if (!sid) return;
-      const { error } = await supabase.from("ai_messages").insert({
-        session_id: sid,
-        role: "assistant",
-        parts: message.parts as unknown as never,
-      });
-      if (error) console.error("persist assistant:", error);
+      if (sid) {
+        const { error } = await supabase.from("ai_messages").insert({
+          session_id: sid,
+          role: "assistant",
+          parts: message.parts as unknown as never,
+        });
+        if (error) console.error("persist assistant:", error);
+      }
+      if (voiceReply) {
+        const text = message.parts
+          .map((p) => (p.type === "text" ? p.text : ""))
+          .join(" ")
+          .trim();
+        if (text) {
+          playTtsStream(text, audioCtxRef).catch((e) => console.error("tts:", e));
+        }
+      }
     },
   });
 
@@ -74,6 +200,56 @@ export function ChatPanel({
   }, [messages, status]);
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = new AudioContext();
+      const src = ctx.createMediaStreamSource(stream);
+      const node = ctx.createScriptProcessor(4096, 1, 1);
+      const chunks: Float32Array[] = [];
+      node.onaudioprocess = (e) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      src.connect(node);
+      node.connect(ctx.destination);
+      recRef.current = { stream, ctx, src, node, chunks };
+      setRecording(true);
+    } catch (e) {
+      toast.error("microphone access denied");
+      console.error(e);
+    }
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    const r = recRef.current;
+    if (!r) return;
+    setRecording(false);
+    r.stream.getTracks().forEach((t) => t.stop());
+    r.node.disconnect();
+    r.src.disconnect();
+    const sampleRate = r.ctx.sampleRate;
+    const chunks = r.chunks;
+    await r.ctx.close();
+    recRef.current = null;
+
+    const blob = encodeWav(chunks, sampleRate);
+    if (blob.size < 2048) {
+      toast.error("recording was empty — try again");
+      return;
+    }
+    setTranscribing(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "recording.wav");
+      const res = await fetch("/api/public/stt", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await res.text());
+      const { text } = (await res.json()) as { text: string };
+      if (text) setInput((prev) => (prev ? prev + " " + text : text));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "transcription failed");
+    } finally {
+      setTranscribing(false);
+    }
+  }, []);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -100,7 +276,6 @@ export function ChatPanel({
       onSessionCreated(sid);
     }
 
-    // Persist user message
     const userParts = [{ type: "text" as const, text: trimmed }];
     await supabase.from("ai_messages").insert({
       session_id: sid,
@@ -126,7 +301,7 @@ export function ChatPanel({
           <div className="text-center py-12 font-mono text-sm">
             <Bot className="h-8 w-8 text-primary mx-auto mb-3" />
             <div className="text-primary">$ agent --ready</div>
-            <div className="text-muted-foreground mt-2">Ask me to explain code, generate features, fix bugs, or plan a task.</div>
+            <div className="text-muted-foreground mt-2">Ask me to explain code, generate features, fix bugs, or plan a task. Hold the mic to talk.</div>
           </div>
         )}
         {messages.map((m) => (
@@ -157,6 +332,29 @@ export function ChatPanel({
 
       <div className="border-t border-border p-3">
         <div className="flex gap-2 items-end">
+          <Button
+            size="icon"
+            variant={recording ? "destructive" : "outline"}
+            onClick={recording ? stopRecording : startRecording}
+            disabled={isLoading || transcribing}
+            title={recording ? "stop recording" : "hold to talk"}
+          >
+            {transcribing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : recording ? (
+              <Square className="h-4 w-4" />
+            ) : (
+              <Mic className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            size="icon"
+            variant={voiceReply ? "default" : "outline"}
+            onClick={() => setVoiceReply((v) => !v)}
+            title={voiceReply ? "voice replies on" : "voice replies off"}
+          >
+            {voiceReply ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </Button>
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -181,7 +379,7 @@ export function ChatPanel({
           )}
         </div>
         <div className="mt-2 font-mono text-[10px] text-muted-foreground">
-          model: <span className="text-primary">{model}</span> · session: {sessionId ? sessionId.slice(0, 8) : "new"}
+          model: <span className="text-primary">{model}</span> · session: {sessionId ? sessionId.slice(0, 8) : "new"} · {recording ? <span className="text-destructive">● rec</span> : "mic idle"} · voice: {voiceReply ? "on" : "off"}
         </div>
       </div>
     </div>
