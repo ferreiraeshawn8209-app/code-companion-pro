@@ -1,73 +1,47 @@
+## What I found
 
-# AI Coding Agent — Build Plan
+1. **Login "not working"** — the auth logs show your Google sign-in actually succeeded, but the OAuth `redirect_uri` is `window.location.origin` (the landing page `/`), and the landing page is fully static: it has no session listener and always shows "sign in / launch console" in the header, regardless of whether you're signed in. So after Google finishes, you land back on the homepage that looks identical to a logged-out state — reads as "login didn't work".
+2. **Rebrand to `spok` is incomplete** — 7 files still say `codex.green` / "Codex Green" (landing, auth, dashboard, settings, `__root`, chat API, vercel functions).
+3. **Vercel deploy** — pipeline + `DeployPanel` are already wired in the workspace `deploy` tab. Just needs a smoke test.
+4. **Voice** — no STT/TTS anywhere yet.
 
-The full spec (multi-provider AI, Vercel deploys, Supabase admin, terminal, live preview, encrypted keys, RBAC, audit log, memory, deployments to many clouds) is a multi-month product. I'll ship it in phases so each phase is usable on its own. Phase 1 is what actually gets built in this first pass; later phases are scoped but not implemented yet.
+## Fixes this turn
 
-## Visual direction
-Terminal green on black: bg `#000000`, surface `#0f1f0f`, primary `#39ff14`, text `#e5e5e5`. Monospace headings (JetBrains Mono), Inter for body. Subtle scanline/CRT accents, no purple/indigo. Dark mode only.
+### 1. Login flow
+- Landing page (`src/routes/index.tsx`): subscribe to `supabase.auth.getUser()` + `onAuthStateChange`. If signed in, swap the header CTAs for **"open console → /dashboard"** + **"sign out"**, and change the hero CTA to `$ open console →`.
+- Auth page (`src/routes/auth.tsx`): pass `redirect_uri: ${window.location.origin}/auth` (public route, iframe-safe) and, after `onAuthStateChange` fires `SIGNED_IN` on return, navigate straight to `/dashboard`.
 
-## Phase 1 — Foundation (this build)
+### 2. Rebrand → spok
+Search-replace `codex.green` → `spok` and "Codex Green" → "spok" across the 7 files. Update `<title>` and meta descriptions in `__root.tsx` + `auth.tsx` head().
 
-**Backend (Lovable Cloud)**
-- Enable Cloud (Supabase).
-- Tables: `profiles`, `user_roles` (enum: admin, member), `projects`, `project_members`, `github_connections` (encrypted token ref), `ai_sessions`, `ai_messages`, `audit_log`.
-- RLS: every table scoped by `auth.uid()` via `project_members`; `has_role()` security-definer fn for admin checks.
-- Grants for `authenticated` + `service_role` on all public tables.
+### 3. Voice I/O in the agent chat
+Add two thin server routes and a mic button in `ChatPanel`:
+- `POST /api/public/stt` — accepts a WAV upload, forwards to Lovable AI Gateway `/v1/audio/transcriptions` with `openai/gpt-4o-mini-transcribe` (SSE streaming), returns transcript.
+- `POST /api/public/tts` — accepts `{ text }`, forwards to `/v1/audio/speech` with `openai/gpt-4o-mini-tts`, `stream_format: sse`, `response_format: pcm`, pipes SSE back.
+- `ChatPanel` gets:
+  - 🎤 button → Web Audio API captures PCM → uploads WAV → transcript populates the input textarea (user can edit before sending).
+  - 🔊 auto-play toggle → when the assistant finishes streaming, pipe the reply through `/api/public/tts` and play the PCM chunks on an `AudioContext` (24 kHz mono).
 
-**Auth**
-- Email/password + Google OAuth (via `supabase--configure_social_auth`).
-- Managed `_authenticated/route.tsx` gate. Public landing at `/`.
+Both routes are server-only, use `LOVABLE_API_KEY` (already in secrets), and validate MIME/size before forwarding.
 
-**Routes**
-- `/` — public landing (hero + sign-in CTA)
-- `/auth` — sign in / sign up
-- `/_authenticated/dashboard` — project list + create
-- `/_authenticated/projects/$id` — project workspace shell (tabs: Chat, Files, Deployments, Settings)
-- `/_authenticated/settings` — profile, API keys UI (stubs for later)
+### 4. Vercel deploy smoke test
+Verify `VERCEL_TOKEN` is set (it is) and that `vercelWhoami` returns from the workspace `deploy` tab. Fix any wiring issues if the UI doesn't call through.
 
-**Project workspace (v1 scope)**
-- **Chat tab**: streaming AI chat via `/api/chat` using Lovable AI Gateway (`google/gemini-3.5-flash` default), reasoning surfaced, per-project session persisted to `ai_messages`.
-- **Files tab**: Monaco editor + file tree. In v1, backed by an in-memory/DB "virtual workspace" tied to the project (real GitHub sync in Phase 2).
-- **Deployments tab**: placeholder with "Connect Vercel" CTA (Phase 3).
-- **Diff viewer** component (react-diff-viewer) for AI-proposed changes with Approve/Reject.
-- **Audit log** writes on every AI action and destructive op.
+### 5. "Find bugs / be creative" system prompt upgrade
+Extend the chat system prompt in `src/routes/api/chat.ts` so the agent is instructed to: propose fixes proactively, call out likely bugs it sees in the shared files list, and suggest UX/design improvements on its own initiative — not just answer literal questions.
 
-**GitHub integration (v1 slice)**
-- OAuth connect flow via `standard_connectors--connect` (GitHub connector).
-- List user repos, view repo tree + file contents (read-only in v1).
-- Server functions only; token never touches browser.
+## Files touched
+- `src/routes/index.tsx` — session-aware header
+- `src/routes/auth.tsx` — redirect target + branding
+- `src/routes/__root.tsx` — title/meta
+- `src/routes/_authenticated/dashboard.tsx`, `settings.tsx` — branding
+- `src/routes/api/chat.ts` — branding + smarter system prompt
+- `src/lib/vercel.functions.ts` — comment branding
+- `src/components/workspace/ChatPanel.tsx` — mic + speaker
+- `src/routes/api/public/stt.ts` — new
+- `src/routes/api/public/tts.ts` — new
 
-**AI provider abstraction**
-- `src/lib/ai/providers/` with `lovable.ts` (default). Interface ready for `openai.ts`, `anthropic.ts`, `gemini.ts`, `deepseek.ts`, `ollama.ts` (Phase 2).
-- BYO-key UI in Settings (encrypted at rest via pgcrypto + `APP_SECRETS_KEY`), disabled with "coming soon" toggles in v1.
-
-**UX**
-- shadcn components restyled to terminal palette.
-- Streaming indicators, toast notifications (sonner), command palette (⌘K) for project switch.
-- Responsive: dashboard + settings work on mobile; workspace is desktop-first with a mobile "open on desktop" notice.
-
-**Security baseline**
-- RLS everywhere, service-role only in `.server.ts`, admin fns re-check role via `has_role()`.
-- Explicit user approval modal before: applying AI file changes, deleting files, running SQL, deploying.
-- Audit log page (admin-only) under `/_authenticated/admin/audit`.
-
-## Phase 2 — Real code operations (next build)
-Full GitHub write ops (create/edit/delete files, branches, commits, push, PRs, conflict view), multi-file AI edits with plan → apply flow, project memory (embeddings on codebase), task queue with step-by-step execution and rollback, project search across repo.
-
-## Phase 3 — Deployment & infra
-Vercel connector (deploy, logs, preview vs prod, failure diagnosis), Supabase admin panel (migrations, tables/policies, buckets, users, edge fns) with approval gates, xterm.js terminal wired to a sandboxed exec function, live preview iframe.
-
-## Phase 4 — Extensibility
-Provider registry for OpenAI/Anthropic/Gemini/DeepSeek/Ollama with BYO keys, integration registry scaffolding for Docker/Cloudflare/AWS/Azure/DO/Railway/Firebase/MySQL, RBAC UI, team invites.
-
-## Technical notes
-- Stack: TanStack Start (already scaffolded), React 19, Tailwind v4, shadcn, Monaco (`@monaco-editor/react`), AI SDK + `@ai-sdk/openai-compatible` via Lovable AI Gateway.
-- Server fns in `src/lib/*.functions.ts`, admin ops load `client.server` inside handlers.
-- Chat streaming route at `src/routes/api/chat.ts` following the Lovable AI Gateway pattern with run-id forwarding.
-- GitHub calls go through the connector gateway (`connector-gateway.lovable.dev/github`), never direct.
-- Design tokens in `src/styles.css` (oklch); no hardcoded colors in components.
-
-## What's explicitly deferred out of Phase 1
-Live terminal execution, real deploy pipelines, cross-file AI refactors with auto-apply, embeddings-based project memory, MySQL/other DB connectors, Docker/AWS/etc. integrations, merge-conflict resolver UI, RBAC beyond admin/member, notifications beyond in-app toasts.
-
-Approve to start building Phase 1.
+## Out of scope (say the word and I'll add next turn)
+- Wake-word / continuous conversation mode (push-to-talk only this pass)
+- Voice choice picker (defaults to `alloy`)
+- Native mobile mic permissions polish (Capacitor already installed)
