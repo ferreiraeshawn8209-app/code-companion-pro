@@ -44,12 +44,12 @@ function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-2 font-mono text-lg font-bold text-primary text-glow">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6 sm:py-8">
+          <Link to="/" className="flex items-center gap-3 font-mono text-lg font-bold text-primary text-glow">
             <Terminal className="h-5 w-5" />
             spok
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {signedIn ? (
               <>
                 <Button
@@ -80,18 +80,18 @@ function Landing() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 py-24 text-center">
-        <div className="font-mono text-xs text-primary text-glow">$ spok init --agent</div>
-        <h1 className="mt-6 text-5xl md:text-7xl font-mono font-bold tracking-tight">
+      <section className="mx-auto max-w-6xl px-6 py-24 sm:py-32 text-center">
+        <div className="font-mono text-xs tracking-widest text-primary text-glow">$ spok init --agent</div>
+        <h1 className="mt-10 text-5xl md:text-7xl font-mono font-bold tracking-tight leading-[1.15]">
           <span className="text-foreground">an AI that ships</span>
           <br />
-          <span className="text-primary text-glow">production code</span>
+          <span className="mt-3 inline-block text-primary text-glow">production code</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+        <p className="mx-auto mt-10 max-w-2xl text-lg leading-relaxed text-muted-foreground">
           Connect a repo. Talk to the agent (voice or text). Review diffs. Deploy to Vercel.
           Human-in-the-loop at every destructive step.
         </p>
-        <div className="mt-10 flex justify-center gap-3">
+        <div className="mt-14 flex justify-center gap-4">
           {signedIn ? (
             <Button size="lg" className="font-mono hover:glow" onClick={() => navigate({ to: "/dashboard" })}>
               $ open console →
@@ -104,28 +104,29 @@ function Landing() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-24">
-        <div className="grid gap-6 md:grid-cols-4">
+      <section className="mx-auto max-w-6xl px-6 pb-32">
+        <div className="grid gap-8 md:gap-10 md:grid-cols-2 lg:grid-cols-4">
           {[
             { icon: GitBranch, title: "github native", body: "Auth, browse repos, read entire codebases. Branch, commit, PR — with approval." },
             { icon: Sparkles, title: "multi-model AI", body: "Gemini, GPT, Claude — swap providers per project. Streaming reasoning built-in." },
             { icon: Mic, title: "voice-first", body: "Push-to-talk to the agent. Assistant replies play back as audio. Both directions." },
             { icon: Shield, title: "you approve", body: "Every file write, SQL, and deploy needs your OK. Full audit log per project." },
           ].map(({ icon: Icon, title, body }) => (
-            <div key={title} className="rounded-lg border border-border bg-card p-6 transition-all hover:border-primary/60">
+            <div key={title} className="rounded-lg border border-border bg-card p-8 transition-all hover:border-primary/60">
               <Icon className="h-6 w-6 text-primary" />
-              <h3 className="mt-4 font-mono text-lg text-primary">{title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+              <h3 className="mt-6 font-mono text-lg text-primary">{title}</h3>
+              <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <footer className="border-t border-border py-8">
-        <div className="mx-auto max-w-6xl px-6 font-mono text-xs text-muted-foreground">
-          [ spok ]  © {new Date().getFullYear()}  ·  human-in-the-loop AI engineering
+      <footer className="border-t border-border py-10">
+        <div className="mx-auto max-w-6xl px-6 font-mono text-xs leading-relaxed text-muted-foreground">
+          [ spok ]  ·  © {new Date().getFullYear()}  ·  human-in-the-loop AI engineering
         </div>
       </footer>
+
     </div>
   );
 }
