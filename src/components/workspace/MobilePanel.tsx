@@ -68,39 +68,43 @@ const config: CapacitorConfig = {
     cleartext: true,
     androidScheme: "https",
   },` : ""}
-  android: { allowMixedContent: true },
+  android: { allowMixedContent: ${liveReload} },
   ios: { contentInset: "always" },
 };
 
 export default config;`;
 
-  const androidOption1 = `# prerequisites: Node 20+, bun, Android Studio, JDK 17
+  const androidOption2 = `# prerequisites: Node 20+, bun, Android Studio, JDK 17
 # (Android Studio installs SDK + platform-tools automatically)
 
-# 1. build the web app
+# 1. build the web app into dist/
 bun run build
 
 # 2. add the android platform (one-time)
 bun run cap:add:android
 
-# 3. sync web assets into the native project
+# 3. copy dist/ into the native project (bundled, offline)
 bun run cap:sync:android
 
-# 4. open in Android Studio and run on a device / emulator
+# 4. open Android Studio
 bun run cap:open:android
-# or run directly from the CLI:
-# bun run cap:run:android
 
-# 5. going forward: every UI change only needs a Lovable publish
-#    the native shell auto-loads ${publishedUrl}
-#    only re-run steps 1 + 3 if you add native plugins`;
+# shortcut for steps 1 + 3 + 4:
+# bun run cap:build:android
+
+# 5. signed release for the Play Store:
+#    Android Studio -> Build -> Generate Signed Bundle / APK
+#    -> Android App Bundle (.aab) -> create/choose keystore -> release
+#    keep the keystore + passwords safe, they are required for every update
+
+# 6. every future release: repeat steps 1 + 3, then rebuild the signed bundle`;
 
   const iosSteps = `# requires macOS + Xcode + CocoaPods
 bun run build
 bunx cap add ios
 bunx cap sync ios
 bunx cap open ios
-# or: bunx cap run ios`;
+# Xcode -> Product -> Archive -> Distribute App`;
 
   const copy = (label: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -111,33 +115,35 @@ bunx cap open ios
 
   return (
     <div className="space-y-6">
-      {/* Option 1 recommended banner */}
+      {/* Option 2 banner */}
       <div className="rounded-md border border-primary/40 bg-primary/5 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Rocket className="h-4 w-4 text-primary" />
           <div className="font-mono text-sm text-primary">
-            recommended: option 1 — live-reload APK
+            active: option 2 — bundled offline build
           </div>
           <Badge
             variant="outline"
             className="font-mono text-[10px] border-primary/40 text-primary"
           >
-            fastest
+            store ready
           </Badge>
         </div>
         <p className="font-mono text-xs text-muted-foreground leading-relaxed">
-          Build a thin native Android shell once. It loads the published web app
-          at runtime, so every Lovable publish updates the app instantly — no
-          rebuild, no Play Store resubmission during development.
+          The web build in <span className="text-primary">dist/</span> is
+          packaged inside the native app, so it runs offline and can be
+          submitted to the Play Store / App Store. Each release needs a rebuild
+          and re-sync.
         </p>
         <div className="flex items-start gap-2 text-muted-foreground">
           <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <p className="font-mono text-[11px] leading-relaxed">
-            This is the quickest way to see spok on your phone. Switch to a
-            bundled offline build later when you are ready for the Play Store.
+            Leave live-reload off for release builds. Flip it on only while
+            iterating on UI against the published preview.
           </p>
         </div>
       </div>
+
 
       {/* Config form */}
       <div className="rounded-md border border-border bg-card p-4 space-y-4">
