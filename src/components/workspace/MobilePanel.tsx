@@ -231,23 +231,24 @@ bunx cap open ios
         <div className="rounded-md border border-border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="font-mono text-xs text-primary flex items-center gap-2">
-              <Smartphone className="h-3 w-3" /> android — option 1
+              <Smartphone className="h-3 w-3" /> android — option 2
             </div>
             <Badge
               variant="outline"
               className="font-mono text-[10px] border-primary/40 text-primary"
             >
-              recommended
+              bundled
             </Badge>
           </div>
           <pre className="bg-background border border-border rounded p-3 font-mono text-[11px] text-muted-foreground overflow-auto max-h-80">
-            {androidOption1}
+            {androidOption2}
           </pre>
           <Button
             size="sm"
             variant="ghost"
             className="font-mono h-7 text-xs w-full"
-            onClick={() => copy("and", androidOption1)}
+            onClick={() => copy("and", androidOption2)}
+
           >
             {copied === "and" ? (
               <Check className="h-3 w-3 mr-1" />
