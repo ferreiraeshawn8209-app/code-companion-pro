@@ -13,7 +13,8 @@
     "cap:add:android": "bunx cap add android",
     "cap:sync:android": "bunx cap sync android",
     "cap:open:android": "bunx cap open android",
-    "cap:run:android": "bunx cap run android"
+    "cap:run:android": "bunx cap run android",
+    "cap:build:android": "vite build && bunx cap sync android && bunx cap open android"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.11",
