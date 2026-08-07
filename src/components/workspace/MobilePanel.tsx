@@ -222,7 +222,7 @@ bunx cap open ios
         <p className="font-mono text-[11px] text-muted-foreground leading-relaxed">
           Save this at the repo root. The checked-in
           <span className="text-primary"> capacitor.config.ts</span> is already
-          configured for Option 1 live-reload.
+          configured for Option 2 (bundled offline, no server block).
         </p>
       </div>
 
