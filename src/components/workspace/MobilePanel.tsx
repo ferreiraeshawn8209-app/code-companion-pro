@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Smartphone, Apple, Copy, Check } from "lucide-react";
+import { Smartphone, Apple, Copy, Check, Rocket, Info } from "lucide-react";
 
 type Props = {
   projectId: string;
@@ -18,8 +18,17 @@ type Props = {
 
 const publishedUrl = "https://spokcodeagent.lovable.app";
 
-export function MobilePanel({ projectId, projectName, initialAppId, initialAppName, initialLiveReload }: Props) {
-  const [appId, setAppId] = useState(initialAppId ?? `green.codex.${projectName.toLowerCase().replace(/[^a-z0-9]/g, "")}`);
+export function MobilePanel({
+  projectId,
+  projectName,
+  initialAppId,
+  initialAppName,
+  initialLiveReload,
+}: Props) {
+  const [appId, setAppId] = useState(
+    initialAppId ??
+      `green.codex.${projectName.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+  );
   const [appName, setAppName] = useState(initialAppName ?? projectName);
   const [liveReload, setLiveReload] = useState(initialLiveReload);
   const [saving, setSaving] = useState(false);
@@ -65,24 +74,33 @@ const config: CapacitorConfig = {
 
 export default config;`;
 
-  const androidSteps = `# 1. Save capacitor.config.ts (above), then:
+  const androidOption1 = `# prerequisites: Node 20+, bun, Android Studio, JDK 17
+# (Android Studio installs SDK + platform-tools automatically)
+
+# 1. build the web app
 bun run build
-bunx cap add android
-bunx cap sync android
 
-# 2. Open in Android Studio:
-bunx cap open android
+# 2. add the android platform (one-time)
+bun run cap:add:android
 
-# 3. Run on connected device / emulator:
-bunx cap run android`;
+# 3. sync web assets into the native project
+bun run cap:sync:android
 
-  const iosSteps = `# Requires macOS + Xcode + CocoaPods (sudo gem install cocoapods)
+# 4. open in Android Studio and run on a device / emulator
+bun run cap:open:android
+# or run directly from the CLI:
+# bun run cap:run:android
+
+# 5. going forward: every UI change only needs a Lovable publish
+#    the native shell auto-loads ${publishedUrl}
+#    only re-run steps 1 + 3 if you add native plugins`;
+
+  const iosSteps = `# requires macOS + Xcode + CocoaPods
 bun run build
 bunx cap add ios
 bunx cap sync ios
-bunx cap open ios     # then Run in Xcode
-# or:
-bunx cap run ios`;
+bunx cap open ios
+# or: bunx cap run ios`;
 
   const copy = (label: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -92,13 +110,44 @@ bunx cap run ios`;
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Option 1 recommended banner */}
+      <div className="rounded-md border border-primary/40 bg-primary/5 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Rocket className="h-4 w-4 text-primary" />
+          <div className="font-mono text-sm text-primary">
+            recommended: option 1 — live-reload APK
+          </div>
+          <Badge
+            variant="outline"
+            className="font-mono text-[10px] border-primary/40 text-primary"
+          >
+            fastest
+          </Badge>
+        </div>
+        <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+          Build a thin native Android shell once. It loads the published web app
+          at runtime, so every Lovable publish updates the app instantly — no
+          rebuild, no Play Store resubmission during development.
+        </p>
+        <div className="flex items-start gap-2 text-muted-foreground">
+          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <p className="font-mono text-[11px] leading-relaxed">
+            This is the quickest way to see spok on your phone. Switch to a
+            bundled offline build later when you are ready for the Play Store.
+          </p>
+        </div>
+      </div>
+
+      {/* Config form */}
       <div className="rounded-md border border-border bg-card p-4 space-y-4">
         <div className="font-mono text-xs text-primary">$ mobile app config</div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <Label className="font-mono text-xs text-muted-foreground">app id (reverse-dns)</Label>
+            <Label className="font-mono text-xs text-muted-foreground">
+              app id (reverse-dns)
+            </Label>
             <Input
               value={appId}
               onChange={(e) => setAppId(e.target.value)}
@@ -107,7 +156,9 @@ bunx cap run ios`;
             />
           </div>
           <div>
-            <Label className="font-mono text-xs text-muted-foreground">display name</Label>
+            <Label className="font-mono text-xs text-muted-foreground">
+              display name
+            </Label>
             <Input
               value={appName}
               onChange={(e) => setAppName(e.target.value)}
@@ -120,49 +171,83 @@ bunx cap run ios`;
           <div>
             <div className="font-mono text-xs">live-reload from published preview</div>
             <div className="font-mono text-[11px] text-muted-foreground mt-0.5">
-              native shell loads {publishedUrl} — UI updates without rebuilding the app
+              native shell loads {publishedUrl} — UI updates without rebuilding
+              the app
             </div>
           </div>
           <Switch checked={liveReload} onCheckedChange={setLiveReload} />
         </div>
 
         <div className="flex justify-end">
-          <Button size="sm" onClick={save} disabled={saving} className="font-mono h-8 text-xs">
+          <Button
+            size="sm"
+            onClick={save}
+            disabled={saving}
+            className="font-mono h-8 text-xs"
+          >
             {saving ? "..." : "save"}
           </Button>
         </div>
       </div>
 
+      {/* Capacitor config */}
       <div className="rounded-md border border-border bg-card p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <div className="font-mono text-xs text-primary">$ capacitor.config.ts</div>
-          <Button size="sm" variant="ghost" className="font-mono h-7 text-xs" onClick={() => copy("cfg", capacitorConfig)}>
-            {copied === "cfg" ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+          <div className="font-mono text-xs text-primary">
+            $ capacitor.config.ts
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="font-mono h-7 text-xs"
+            onClick={() => copy("cfg", capacitorConfig)}
+          >
+            {copied === "cfg" ? (
+              <Check className="h-3 w-3 mr-1" />
+            ) : (
+              <Copy className="h-3 w-3 mr-1" />
+            )}
             copy
           </Button>
         </div>
         <pre className="bg-background border border-border rounded p-3 font-mono text-[11px] text-muted-foreground overflow-auto max-h-52">
-{capacitorConfig}
+          {capacitorConfig}
         </pre>
-        <p className="font-mono text-[11px] text-muted-foreground">
-          Save this at the repo root. The value here is generated from your settings above — the checked-in
-          <span className="text-primary"> capacitor.config.ts</span> ships with sensible defaults you can override.
+        <p className="font-mono text-[11px] text-muted-foreground leading-relaxed">
+          Save this at the repo root. The checked-in
+          <span className="text-primary"> capacitor.config.ts</span> is already
+          configured for Option 1 live-reload.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {/* Build steps */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-md border border-border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="font-mono text-xs text-primary flex items-center gap-2">
-              <Smartphone className="h-3 w-3" /> android
+              <Smartphone className="h-3 w-3" /> android — option 1
             </div>
-            <Badge variant="outline" className="font-mono text-[10px] border-primary/40 text-primary">ready</Badge>
+            <Badge
+              variant="outline"
+              className="font-mono text-[10px] border-primary/40 text-primary"
+            >
+              recommended
+            </Badge>
           </div>
-          <pre className="bg-background border border-border rounded p-3 font-mono text-[11px] text-muted-foreground overflow-auto max-h-64">
-{androidSteps}
+          <pre className="bg-background border border-border rounded p-3 font-mono text-[11px] text-muted-foreground overflow-auto max-h-80">
+            {androidOption1}
           </pre>
-          <Button size="sm" variant="ghost" className="font-mono h-7 text-xs w-full" onClick={() => copy("and", androidSteps)}>
-            {copied === "and" ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="font-mono h-7 text-xs w-full"
+            onClick={() => copy("and", androidOption1)}
+          >
+            {copied === "and" ? (
+              <Check className="h-3 w-3 mr-1" />
+            ) : (
+              <Copy className="h-3 w-3 mr-1" />
+            )}
             copy commands
           </Button>
         </div>
@@ -172,13 +257,27 @@ bunx cap run ios`;
             <div className="font-mono text-xs text-primary flex items-center gap-2">
               <Apple className="h-3 w-3" /> ios
             </div>
-            <Badge variant="outline" className="font-mono text-[10px] border-primary/40 text-primary">ready</Badge>
+            <Badge
+              variant="outline"
+              className="font-mono text-[10px] border-border text-muted-foreground"
+            >
+              later
+            </Badge>
           </div>
-          <pre className="bg-background border border-border rounded p-3 font-mono text-[11px] text-muted-foreground overflow-auto max-h-64">
-{iosSteps}
+          <pre className="bg-background border border-border rounded p-3 font-mono text-[11px] text-muted-foreground overflow-auto max-h-80">
+            {iosSteps}
           </pre>
-          <Button size="sm" variant="ghost" className="font-mono h-7 text-xs w-full" onClick={() => copy("ios", iosSteps)}>
-            {copied === "ios" ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="font-mono h-7 text-xs w-full"
+            onClick={() => copy("ios", iosSteps)}
+          >
+            {copied === "ios" ? (
+              <Check className="h-3 w-3 mr-1" />
+            ) : (
+              <Copy className="h-3 w-3 mr-1" />
+            )}
             copy commands
           </Button>
         </div>
