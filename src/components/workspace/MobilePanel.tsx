@@ -6,7 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Smartphone, Apple, Copy, Check, Rocket, Info } from "lucide-react";
+import { Smartphone, Apple, Copy, Check, Rocket, Info, Download, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { exportAndroidProject } from "@/lib/android-export.functions";
 
 type Props = {
   projectId: string;
