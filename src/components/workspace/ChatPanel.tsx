@@ -164,10 +164,18 @@ export function ChatPanel({
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [voiceReply, setVoiceReply] = useState(false);
+  const [convoMode, setConvoMode] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentSessionRef = useRef<string | null>(sessionId);
   currentSessionRef.current = sessionId;
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const convoRef = useRef(false);
+  convoRef.current = convoMode;
+  const voiceReplyRef = useRef(false);
+  voiceReplyRef.current = voiceReply;
+  const stopRecordingRef = useRef<() => void>(() => {});
+  const startRecordingRef = useRef<() => void>(() => {});
   const recRef = useRef<{
     stream: MediaStream;
     ctx: AudioContext;
@@ -201,15 +209,23 @@ export function ChatPanel({
         });
         if (error) console.error("persist assistant:", error);
       }
-      if (voiceReply) {
-        const text = message.parts
-          .map((p) => (p.type === "text" ? p.text : ""))
-          .join(" ")
-          .trim();
+      if (voiceReplyRef.current || convoRef.current) {
+        const text = toSpeakable(
+          message.parts.map((p) => (p.type === "text" ? p.text : "")).join(" "),
+        );
         if (text) {
-          playTtsStream(text, audioCtxRef).catch((e) => console.error("tts:", e));
+          setSpeaking(true);
+          try {
+            await playTtsStream(text, audioCtxRef);
+          } catch (e) {
+            console.error("tts:", e);
+          } finally {
+            setSpeaking(false);
+          }
         }
       }
+      // hands-free: listen again as soon as the agent stops talking
+      if (convoRef.current) startRecordingRef.current();
     },
   });
 
@@ -223,28 +239,102 @@ export function ChatPanel({
 
   const isLoading = status === "submitted" || status === "streaming";
 
+  const submitText = useCallback(
+    async (raw: string) => {
+      const trimmed = raw.trim();
+      if (!trimmed) return;
+
+      let sid = currentSessionRef.current;
+      if (!sid) {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) {
+          toast.error("Not signed in");
+          return;
+        }
+        const { data, error } = await supabase
+          .from("ai_sessions")
+          .insert({ project_id: projectId, user_id: u.user.id, title: trimmed.slice(0, 60) })
+          .select()
+          .single();
+        if (error || !data) {
+          toast.error(error?.message ?? "session error");
+          return;
+        }
+        sid = data.id;
+        currentSessionRef.current = sid;
+        onSessionCreated(sid);
+      }
+
+      const userParts = [{ type: "text" as const, text: trimmed }];
+      await supabase.from("ai_messages").insert({
+        session_id: sid,
+        role: "user",
+        parts: userParts,
+      });
+      await supabase.from("audit_log").insert({
+        project_id: projectId,
+        action: "ai.prompt",
+        target: sid,
+        metadata: { model, prompt_length: trimmed.length, voice: convoRef.current },
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+      });
+
+      setInput("");
+      sendMessage({ text: trimmed });
+    },
+    [projectId, model, onSessionCreated, sendMessage],
+  );
+
   const startRecording = useCallback(async () => {
+    if (recRef.current) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
       const ctx = new AudioContext();
       const src = ctx.createMediaStreamSource(stream);
       const node = ctx.createScriptProcessor(4096, 1, 1);
       const chunks: Float32Array[] = [];
-      node.onaudioprocess = (e) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      let heardSpeech = false;
+      let silenceFrames = 0;
+      const framesPerSec = ctx.sampleRate / 4096;
+
+      node.onaudioprocess = (e) => {
+        const data = new Float32Array(e.inputBuffer.getChannelData(0));
+        chunks.push(data);
+        if (!convoRef.current) return;
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+        const rms = Math.sqrt(sum / data.length);
+        if (rms > 0.015) {
+          heardSpeech = true;
+          silenceFrames = 0;
+        } else if (heardSpeech) {
+          silenceFrames++;
+          // ~1.4s of silence after speech ends the turn automatically
+          if (silenceFrames > framesPerSec * 1.4) {
+            node.onaudioprocess = null;
+            stopRecordingRef.current();
+          }
+        }
+      };
       src.connect(node);
       node.connect(ctx.destination);
       recRef.current = { stream, ctx, src, node, chunks };
       setRecording(true);
     } catch (e) {
       toast.error("microphone access denied");
+      setConvoMode(false);
       console.error(e);
     }
   }, []);
+  startRecordingRef.current = () => void startRecording();
 
   const stopRecording = useCallback(async () => {
     const r = recRef.current;
     if (!r) return;
     setRecording(false);
+    r.node.onaudioprocess = null;
     r.stream.getTracks().forEach((t) => t.stop());
     r.node.disconnect();
     r.src.disconnect();
@@ -255,6 +345,10 @@ export function ChatPanel({
 
     const blob = encodeWav(chunks, sampleRate);
     if (blob.size < 2048) {
+      if (convoRef.current) {
+        startRecordingRef.current();
+        return;
+      }
       toast.error("recording was empty — try again");
       return;
     }
@@ -265,56 +359,56 @@ export function ChatPanel({
       const res = await fetch("/api/public/stt", { method: "POST", body: fd });
       if (!res.ok) throw new Error(await res.text());
       const { text } = (await res.json()) as { text: string };
-      if (text) setInput((prev) => (prev ? prev + " " + text : text));
+      if (!text?.trim()) {
+        if (convoRef.current) startRecordingRef.current();
+        return;
+      }
+      if (convoRef.current) {
+        await submitText(text);
+      } else {
+        setInput((prev) => (prev ? prev + " " + text : text));
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "transcription failed");
+      setConvoMode(false);
     } finally {
       setTranscribing(false);
     }
+  }, [submitText]);
+  stopRecordingRef.current = () => void stopRecording();
+
+  const toggleConvo = useCallback(() => {
+    if (convoRef.current) {
+      convoRef.current = false;
+      setConvoMode(false);
+      if (recRef.current) void stopRecording();
+      toast("voice conversation off");
+    } else {
+      convoRef.current = true;
+      setConvoMode(true);
+      toast.success("voice conversation on — just start talking");
+      void startRecording();
+    }
+  }, [startRecording, stopRecording]);
+
+  useEffect(() => {
+    return () => {
+      convoRef.current = false;
+      const r = recRef.current;
+      if (r) {
+        r.node.onaudioprocess = null;
+        r.stream.getTracks().forEach((t) => t.stop());
+        void r.ctx.close();
+        recRef.current = null;
+      }
+    };
   }, []);
 
   const handleSend = async () => {
-    const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
-
-    let sid = currentSessionRef.current;
-    if (!sid) {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
-        toast.error("Not signed in");
-        return;
-      }
-      const { data, error } = await supabase
-        .from("ai_sessions")
-        .insert({ project_id: projectId, user_id: u.user.id, title: trimmed.slice(0, 60) })
-        .select()
-        .single();
-      if (error || !data) {
-        toast.error(error?.message ?? "session error");
-        return;
-      }
-      sid = data.id;
-      currentSessionRef.current = sid;
-      onSessionCreated(sid);
-    }
-
-    const userParts = [{ type: "text" as const, text: trimmed }];
-    await supabase.from("ai_messages").insert({
-      session_id: sid,
-      role: "user",
-      parts: userParts,
-    });
-    await supabase.from("audit_log").insert({
-      project_id: projectId,
-      action: "ai.prompt",
-      target: sid,
-      metadata: { model, prompt_length: trimmed.length },
-      user_id: (await supabase.auth.getUser()).data.user?.id,
-    });
-
-    setInput("");
-    sendMessage({ text: trimmed });
+    if (!input.trim() || isLoading) return;
+    await submitText(input);
   };
+
 
   return (
     <div className="flex flex-col h-full">
