@@ -183,6 +183,39 @@ bunx cap open ios
         </div>
       </div>
 
+      {/* Repo -> Android Studio export */}
+      <div className="rounded-md border border-border bg-card p-4 space-y-3">
+        <div className="font-mono text-xs text-primary">
+          $ export repo → android studio
+        </div>
+        <p className="font-mono text-[11px] text-muted-foreground leading-relaxed">
+          Packages every file in this workspace (including an imported GitHub
+          repo) into a zip with a generated{" "}
+          <span className="text-primary">capacitor.config.ts</span>, Capacitor
+          scripts in <span className="text-primary">package.json</span>, a{" "}
+          <span className="text-primary">setup-android.sh</span> one-shot script
+          and <span className="text-primary">ANDROID_STUDIO.md</span>. Unzip, run
+          the script, and Android Studio opens the native project.
+        </p>
+        <Button
+          size="sm"
+          onClick={exportAndroid}
+          disabled={exporting}
+          className="font-mono h-8 text-xs w-full"
+        >
+          {exporting ? (
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3 mr-1" />
+          )}
+          {exporting ? "packaging..." : "download android studio project"}
+        </Button>
+        <p className="font-mono text-[10px] text-muted-foreground">
+          uses the app id / display name above · live-reload toggle is baked
+          into the generated config
+        </p>
+      </div>
+
 
       {/* Config form */}
       <div className="rounded-md border border-border bg-card p-4 space-y-4">
