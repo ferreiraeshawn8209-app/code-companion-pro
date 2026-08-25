@@ -6,7 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Smartphone, Apple, Copy, Check, Rocket, Info } from "lucide-react";
+import { Smartphone, Apple, Copy, Check, Rocket, Info, Download, Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { exportAndroidProject } from "@/lib/android-export.functions";
 
 type Props = {
   projectId: string;
@@ -33,6 +35,43 @@ export function MobilePanel({
   const [liveReload, setLiveReload] = useState(initialLiveReload);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const runExport = useServerFn(exportAndroidProject);
+
+  const exportAndroid = async () => {
+    setExporting(true);
+    try {
+      const res = await runExport({
+        data: {
+          projectId,
+          appId,
+          appName,
+          liveReloadUrl: liveReload ? publishedUrl : null,
+        },
+      });
+      const bin = atob(res.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`exported ${res.fileCount} files → ${res.filename}`);
+      const { data: u } = await supabase.auth.getUser();
+      await supabase.from("audit_log").insert({
+        project_id: projectId,
+        user_id: u.user?.id,
+        action: "mobile.export_android",
+        target: res.filename,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -142,6 +181,39 @@ bunx cap open ios
             iterating on UI against the published preview.
           </p>
         </div>
+      </div>
+
+      {/* Repo -> Android Studio export */}
+      <div className="rounded-md border border-border bg-card p-4 space-y-3">
+        <div className="font-mono text-xs text-primary">
+          $ export repo → android studio
+        </div>
+        <p className="font-mono text-[11px] text-muted-foreground leading-relaxed">
+          Packages every file in this workspace (including an imported GitHub
+          repo) into a zip with a generated{" "}
+          <span className="text-primary">capacitor.config.ts</span>, Capacitor
+          scripts in <span className="text-primary">package.json</span>, a{" "}
+          <span className="text-primary">setup-android.sh</span> one-shot script
+          and <span className="text-primary">ANDROID_STUDIO.md</span>. Unzip, run
+          the script, and Android Studio opens the native project.
+        </p>
+        <Button
+          size="sm"
+          onClick={exportAndroid}
+          disabled={exporting}
+          className="font-mono h-8 text-xs w-full"
+        >
+          {exporting ? (
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3 mr-1" />
+          )}
+          {exporting ? "packaging..." : "download android studio project"}
+        </Button>
+        <p className="font-mono text-[10px] text-muted-foreground">
+          uses the app id / display name above · live-reload toggle is baked
+          into the generated config
+        </p>
       </div>
 
 
