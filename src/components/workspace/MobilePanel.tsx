@@ -35,6 +35,43 @@ export function MobilePanel({
   const [liveReload, setLiveReload] = useState(initialLiveReload);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const runExport = useServerFn(exportAndroidProject);
+
+  const exportAndroid = async () => {
+    setExporting(true);
+    try {
+      const res = await runExport({
+        data: {
+          projectId,
+          appId,
+          appName,
+          liveReloadUrl: liveReload ? publishedUrl : null,
+        },
+      });
+      const bin = atob(res.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`exported ${res.fileCount} files → ${res.filename}`);
+      const { data: u } = await supabase.auth.getUser();
+      await supabase.from("audit_log").insert({
+        project_id: projectId,
+        user_id: u.user?.id,
+        action: "mobile.export_android",
+        target: res.filename,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
