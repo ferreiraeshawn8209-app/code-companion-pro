@@ -126,7 +126,29 @@ async function playTtsStream(text: string, ctxRef: React.MutableRefObject<AudioC
       }
     }
   }
+
+  // wait until the last scheduled buffer has actually finished playing
+  const remaining = playhead - ctx.currentTime;
+  if (remaining > 0) await new Promise((r) => setTimeout(r, remaining * 1000 + 120));
 }
+
+/** Strip markdown/code so the speech stays natural and short. */
+function toSpeakable(raw: string): string {
+  return raw
+    .replace(/```[\s\S]*?```/g, " (code block omitted) ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/\*\*|__|\*|_/g, "")
+    .replace(/^\s*[-•]\s*/gm, "")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 3500);
+}
+
+
 
 export function ChatPanel({
   projectId,
