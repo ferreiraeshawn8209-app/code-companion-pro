@@ -3,7 +3,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones } from "lucide-react";
+import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -469,6 +469,15 @@ export function ChatPanel({
             ) : (
               <Mic className="h-4 w-4" />
             )}
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={runAudit}
+            disabled={isLoading}
+            title="audit project — agent suggests repairs, perf wins & features"
+          >
+            <Sparkles className="h-4 w-4 text-primary" />
           </Button>
           <Button
             size="icon"
