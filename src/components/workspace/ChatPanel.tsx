@@ -409,6 +409,13 @@ export function ChatPanel({
     await submitText(input);
   };
 
+  const runAudit = async () => {
+    if (isLoading) return;
+    await submitText(
+      "Run a full project audit. Review the project name, description and file list in context and report: (1) faults & bugs to repair, (2) performance upgrades, (3) security hardening, (4) UX/design improvements, (5) new features worth adding. Prioritize by impact, tag each [fix]/[perf]/[security]/[ux]/[feature], and name the files involved. Be specific and opinionated.",
+    );
+  };
+
 
   return (
     <div className="flex flex-col h-full">
