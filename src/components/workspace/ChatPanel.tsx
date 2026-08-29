@@ -3,7 +3,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones } from "lucide-react";
+import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -409,6 +409,13 @@ export function ChatPanel({
     await submitText(input);
   };
 
+  const runAudit = async () => {
+    if (isLoading) return;
+    await submitText(
+      "Run a full project audit. Review the project name, description and file list in context and report: (1) faults & bugs to repair, (2) performance upgrades, (3) security hardening, (4) UX/design improvements, (5) new features worth adding. Prioritize by impact, tag each [fix]/[perf]/[security]/[ux]/[feature], and name the files involved. Be specific and opinionated.",
+    );
+  };
+
 
   return (
     <div className="flex flex-col h-full">
@@ -417,7 +424,7 @@ export function ChatPanel({
           <div className="text-center py-12 font-mono text-sm">
             <Bot className="h-8 w-8 text-primary mx-auto mb-3" />
             <div className="text-primary">$ agent --ready</div>
-            <div className="text-muted-foreground mt-2">Ask me to explain code, generate features, fix bugs, or plan a task. Hold the mic to talk.</div>
+            <div className="text-muted-foreground mt-2">Ask me to explain code, generate features, fix bugs, or plan a task. Tap ✦ for a full audit with suggested repairs, perf wins &amp; new features. Hold the mic to talk.</div>
           </div>
         )}
         {messages.map((m) => (
@@ -462,6 +469,15 @@ export function ChatPanel({
             ) : (
               <Mic className="h-4 w-4" />
             )}
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={runAudit}
+            disabled={isLoading}
+            title="audit project — agent suggests repairs, perf wins & features"
+          >
+            <Sparkles className="h-4 w-4 text-primary" />
           </Button>
           <Button
             size="icon"
