@@ -424,7 +424,7 @@ export function ChatPanel({
           <div className="text-center py-12 font-mono text-sm">
             <Bot className="h-8 w-8 text-primary mx-auto mb-3" />
             <div className="text-primary">$ agent --ready</div>
-            <div className="text-muted-foreground mt-2">Ask me to explain code, generate features, fix bugs, or plan a task. Hold the mic to talk.</div>
+            <div className="text-muted-foreground mt-2">Ask me to explain code, generate features, fix bugs, or plan a task. Tap ✦ for a full audit with suggested repairs, perf wins &amp; new features. Hold the mic to talk.</div>
           </div>
         )}
         {messages.map((m) => (
