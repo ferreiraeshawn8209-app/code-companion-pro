@@ -189,8 +189,14 @@ export function ChatPanel({
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/chat",
+      headers: async (): Promise<Record<string, string>> => {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) return {};
+        return { Authorization: `Bearer ${data.session.access_token}` };
+      },
       body: {
         model,
+        projectId,
         projectContext: {
           name: projectName,
           description: projectDescription ?? undefined,
@@ -441,7 +447,27 @@ export function ChatPanel({
                 {m.role === "user" ? "you" : "agent"}
               </div>
               <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+                {m.parts.map((p, i) => {
+                  if (p.type === "text") return <span key={i}>{p.text}</span>;
+                  if (p.type.startsWith("tool-") || p.type === "dynamic-tool") {
+                    const tp = p as unknown as { type: string; toolName?: string; state?: string; output?: unknown };
+                    const name = p.type === "dynamic-tool" ? (tp.toolName ?? "tool") : p.type.slice(5);
+                    const done = tp.state === "output-available";
+                    const failed = tp.state === "output-error";
+                    return (
+                      <div key={i} className="my-1 font-mono text-[11px] flex items-center gap-2 text-muted-foreground">
+                        <span className={failed ? "text-destructive" : "text-primary"}>
+                          {failed ? "✗" : done ? "✓" : "…"}
+                        </span>
+                        <span>$ {name}</span>
+                        {done && name === "write_file" && (
+                          <span className="text-primary/70">{(tp.output as { reason?: string })?.reason ?? "file updated"}</span>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
               </div>
             </div>
           </div>
