@@ -3,8 +3,9 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones, Sparkles } from "lucide-react";
+import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones, Sparkles, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { exportAndroidProject } from "@/lib/android-export.functions";
 import { toast } from "sonner";
 
 interface ProjectFileRef {
