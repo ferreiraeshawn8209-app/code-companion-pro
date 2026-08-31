@@ -3,8 +3,9 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones, Sparkles } from "lucide-react";
+import { Send, Loader2, Bot, User, StopCircle, Mic, Square, Volume2, VolumeX, Headphones, Sparkles, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { exportAndroidProject } from "@/lib/android-export.functions";
 import { toast } from "sonner";
 
 interface ProjectFileRef {
@@ -166,6 +167,33 @@ export function ChatPanel({
   const [voiceReply, setVoiceReply] = useState(false);
   const [convoMode, setConvoMode] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const downloadAndroidZip = useCallback(
+    async (appId: string, appName: string) => {
+      setExporting(true);
+      try {
+        const res = await exportAndroidProject({
+          data: { projectId, appId, appName, liveReloadUrl: null },
+        });
+        const bin = atob(res.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = res.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`packaged ${res.fileCount} files for android studio`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "export failed");
+      } finally {
+        setExporting(false);
+      }
+    },
+    [projectId],
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentSessionRef = useRef<string | null>(sessionId);
   currentSessionRef.current = sessionId;
@@ -454,18 +482,41 @@ export function ChatPanel({
                     const name = p.type === "dynamic-tool" ? (tp.toolName ?? "tool") : p.type.slice(5);
                     const done = tp.state === "output-available";
                     const failed = tp.state === "output-error";
+                    const out = tp.output as { reason?: string; appId?: string; appName?: string; ready?: boolean } | undefined;
                     return (
-                      <div key={i} className="my-1 font-mono text-[11px] flex items-center gap-2 text-muted-foreground">
-                        <span className={failed ? "text-destructive" : "text-primary"}>
-                          {failed ? "✗" : done ? "✓" : "…"}
-                        </span>
-                        <span>$ {name}</span>
-                        {done && name === "write_file" && (
-                          <span className="text-primary/70">{(tp.output as { reason?: string })?.reason ?? "file updated"}</span>
+                      <div key={i} className="my-1 font-mono text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className={failed ? "text-destructive" : "text-primary"}>
+                            {failed ? "✗" : done ? "✓" : "…"}
+                          </span>
+                          <span>$ {name}</span>
+                          {done && name === "write_file" && (
+                            <span className="text-primary/70">{out?.reason ?? "file updated"}</span>
+                          )}
+                          {done && name === "make_mobile_ready" && (
+                            <span className="text-primary/70">android + ios scaffolding written</span>
+                          )}
+                        </div>
+                        {done && name === "export_android_project" && out?.ready && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 font-mono text-xs"
+                            disabled={exporting}
+                            onClick={() => downloadAndroidZip(out.appId!, out.appName!)}
+                          >
+                            {exporting ? (
+                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                            ) : (
+                              <Download className="h-3 w-3 mr-2" />
+                            )}
+                            download android studio project
+                          </Button>
                         )}
                       </div>
                     );
                   }
+
                   return null;
                 })}
               </div>

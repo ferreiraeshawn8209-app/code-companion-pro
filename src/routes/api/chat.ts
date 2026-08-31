@@ -18,6 +18,10 @@ How you work:
 - Prefer TypeScript, React, Tailwind, and semantic design tokens over raw hex colors.
 - Never fabricate library APIs. If unsure of a file's current state, read it again.
 
+Mobile conversion:
+- If the user asks to make the app Android/iOS compatible, run make_mobile_ready (pick a sensible appId like app.spok.<project-slug> and appName; default mode "bundled" unless they want live-reload), then export_android_project so a download button appears in chat.
+- Explain in one short list what they do next: unzip, run setup-android.sh, Android Studio opens the native project. iOS needs a Mac + Xcode via cap:build:ios.
+
 Proactive advisory duty (always on):
 - End EVERY substantive reply with a "## suggestions" section: 2-5 concrete, prioritized items tagged [fix], [perf], [security], [ux], or [feature], naming the files involved.
 - Flag faults you notice even when unrelated to the current question. Say "no issues found" when an area is genuinely clean.
@@ -173,8 +177,88 @@ function buildTools(supabase: ReturnType<typeof makeUserClient>, projectId: stri
         return { ok: true, path, reason };
       },
     }),
+
+    make_mobile_ready: tool({
+      description:
+        "Convert the current web project into an Android + iOS (Capacitor) compatible app. Writes capacitor.config.ts, mobile npm scripts, @capacitor deps in package.json, setup-android.sh and ANDROID_STUDIO.md into the workspace. Use when the user asks to make the app Android/iOS compatible.",
+      inputSchema: z.object({
+        appId: z.string().describe("reverse-domain bundle id, e.g. app.spok.myproject"),
+        appName: z.string().describe("display name shown under the launcher icon"),
+        mode: z.enum(["bundled", "live"]).describe("bundled = offline store-ready build; live = hot-loads a published URL"),
+        liveReloadUrl: z.string().nullable().describe("published https URL, required when mode is 'live', otherwise null"),
+      }),
+      execute: async ({ appId, appName, mode, liveReloadUrl }) => {
+        const pid = needProject();
+        const { buildMobileScaffoldFiles } = await import("@/lib/android-export.server");
+        const { data: pkg } = await supabase
+          .from("project_files")
+          .select("content")
+          .eq("project_id", pid)
+          .eq("path", "package.json")
+          .maybeSingle();
+        const { data: project } = await supabase
+          .from("projects")
+          .select("name")
+          .eq("id", pid)
+          .maybeSingle();
+
+        const files = buildMobileScaffoldFiles(
+          {
+            appId,
+            appName,
+            projectName: project?.name ?? appName,
+            liveReloadUrl: mode === "live" ? liveReloadUrl : null,
+          },
+          pkg?.content,
+        );
+
+        const now = new Date().toISOString();
+        const { error } = await supabase.from("project_files").upsert(
+          files.map((f) => ({ project_id: pid, path: f.path, content: f.content, language: f.language, updated_at: now })),
+          { onConflict: "project_id,path" },
+        );
+        if (error) return { error: error.message };
+        await audit("ai.make_mobile_ready", appId, { appName, mode, files: files.map((f) => f.path) });
+        return {
+          ok: true,
+          appId,
+          appName,
+          mode,
+          written: files.map((f) => f.path),
+          next: "Call export_android_project to give the user a downloadable Android Studio project.",
+        };
+      },
+    }),
+
+    export_android_project: tool({
+      description:
+        "Package the workspace as a downloadable Android Studio (Capacitor) project zip and offer it to the user in chat. Run make_mobile_ready first if the project has no capacitor.config.ts.",
+      inputSchema: z.object({
+        appId: z.string(),
+        appName: z.string(),
+      }),
+      execute: async ({ appId, appName }) => {
+        const pid = needProject();
+        const { count, error } = await supabase
+          .from("project_files")
+          .select("path", { count: "exact", head: true })
+          .eq("project_id", pid);
+        if (error) return { error: error.message };
+        if (!count) return { error: "workspace is empty — import a repo first" };
+        await audit("ai.export_android_project", appId, { appName, fileCount: count });
+        return {
+          ready: true,
+          appId,
+          appName,
+          fileCount: count,
+          download: "offered_in_chat",
+          note: "A download button is shown to the user in chat. Unzip, run setup-android.sh, Android Studio opens the native app.",
+        };
+      },
+    }),
   };
 }
+
 
 export const Route = createFileRoute("/api/chat")({
   server: {

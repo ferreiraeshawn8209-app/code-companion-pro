@@ -129,11 +129,14 @@ function patchPackageJson(raw: string | undefined, o: AndroidExportOptions) {
     "cap:open:android": "bunx cap open android",
     "cap:run:android": "bunx cap run android",
     "cap:build:android": "bun run build && bunx cap sync android && bunx cap open android",
+    "cap:add:ios": "bunx cap add ios",
+    "cap:build:ios": "bun run build && bunx cap sync ios && bunx cap open ios",
   };
   pkg.dependencies = {
     ...(pkg.dependencies ?? {}),
     "@capacitor/core": CAP_VERSION,
     "@capacitor/android": CAP_VERSION,
+    "@capacitor/ios": CAP_VERSION,
   };
   pkg.devDependencies = {
     ...(pkg.devDependencies ?? {}),
@@ -141,6 +144,24 @@ function patchPackageJson(raw: string | undefined, o: AndroidExportOptions) {
   };
   return JSON.stringify(pkg, null, 2) + "\n";
 }
+
+/**
+ * The mobile scaffolding files (capacitor config, setup script, docs, patched
+ * package.json) that make a web workspace Android/iOS ready. Used by the
+ * autonomous agent tool so the conversion is written back into the workspace.
+ */
+export function buildMobileScaffoldFiles(
+  options: AndroidExportOptions,
+  packageJsonRaw?: string,
+): Array<{ path: string; content: string; language: string }> {
+  return [
+    { path: "capacitor.config.ts", content: capacitorConfig(options), language: "typescript" },
+    { path: "ANDROID_STUDIO.md", content: readme(options), language: "markdown" },
+    { path: "setup-android.sh", content: setupScript(options), language: "shell" },
+    { path: "package.json", content: patchPackageJson(packageJsonRaw, options), language: "json" },
+  ];
+}
+
 
 export function buildAndroidExportZip(
   files: ExportFile[],
