@@ -166,6 +166,33 @@ export function ChatPanel({
   const [voiceReply, setVoiceReply] = useState(false);
   const [convoMode, setConvoMode] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const downloadAndroidZip = useCallback(
+    async (appId: string, appName: string) => {
+      setExporting(true);
+      try {
+        const res = await exportAndroidProject({
+          data: { projectId, appId, appName, liveReloadUrl: null },
+        });
+        const bin = atob(res.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = res.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`packaged ${res.fileCount} files for android studio`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "export failed");
+      } finally {
+        setExporting(false);
+      }
+    },
+    [projectId],
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentSessionRef = useRef<string | null>(sessionId);
   currentSessionRef.current = sessionId;
