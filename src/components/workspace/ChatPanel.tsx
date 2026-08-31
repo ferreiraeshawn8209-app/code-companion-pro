@@ -454,18 +454,41 @@ export function ChatPanel({
                     const name = p.type === "dynamic-tool" ? (tp.toolName ?? "tool") : p.type.slice(5);
                     const done = tp.state === "output-available";
                     const failed = tp.state === "output-error";
+                    const out = tp.output as { reason?: string; appId?: string; appName?: string; ready?: boolean } | undefined;
                     return (
-                      <div key={i} className="my-1 font-mono text-[11px] flex items-center gap-2 text-muted-foreground">
-                        <span className={failed ? "text-destructive" : "text-primary"}>
-                          {failed ? "✗" : done ? "✓" : "…"}
-                        </span>
-                        <span>$ {name}</span>
-                        {done && name === "write_file" && (
-                          <span className="text-primary/70">{(tp.output as { reason?: string })?.reason ?? "file updated"}</span>
+                      <div key={i} className="my-1 font-mono text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className={failed ? "text-destructive" : "text-primary"}>
+                            {failed ? "✗" : done ? "✓" : "…"}
+                          </span>
+                          <span>$ {name}</span>
+                          {done && name === "write_file" && (
+                            <span className="text-primary/70">{out?.reason ?? "file updated"}</span>
+                          )}
+                          {done && name === "make_mobile_ready" && (
+                            <span className="text-primary/70">android + ios scaffolding written</span>
+                          )}
+                        </div>
+                        {done && name === "export_android_project" && out?.ready && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 font-mono text-xs"
+                            disabled={exporting}
+                            onClick={() => downloadAndroidZip(out.appId!, out.appName!)}
+                          >
+                            {exporting ? (
+                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                            ) : (
+                              <Download className="h-3 w-3 mr-2" />
+                            )}
+                            download android studio project
+                          </Button>
                         )}
                       </div>
                     );
                   }
+
                   return null;
                 })}
               </div>
