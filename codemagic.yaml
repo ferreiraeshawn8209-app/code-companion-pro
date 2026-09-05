@@ -5,9 +5,9 @@ workflows:
     max_build_duration: 60
     environment:
       node: 20
-      android:
-        ndk: 25.1.8937393
-        sdk: 34
+    android:
+      ndk: 25.1.8937393
+      sdk: 34
     scripts:
       - name: Install Bun
         script: |
