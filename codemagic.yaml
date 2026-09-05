@@ -1,0 +1,88 @@
+# Codemagic cloud build for spok — produces an installable Android APK
+# in the cloud. No local Android Studio / SDK needed.
+#
+# How to use:
+#   1. Push this repo to GitHub.
+#   2. Sign up at codemagic.io with your GitHub account (free tier is fine).
+#   3. Add the repository, pick this codemagic.yaml, and start the
+#      "Android APK (debug)" workflow.
+#   4. When the build finishes, download app-debug.apk from the build
+#      artifacts and install it on your phone.
+#
+# To build a signed release AAB/APK for the Play Store, add your keystore
+# details in the Codemagic UI (Teams > Code signing) and use the
+# "Android release" workflow instead.
+
+workflows:
+  android-apk-debug:
+    name: Android APK (debug)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      groups:
+        - node
+      vars:
+        BUN_VERSION: "1.2.0"
+      node: 20
+    scripts:
+      - name: Install bun
+        script: |
+          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
+          export PATH="$HOME/.bun/bin:$PATH"
+          echo "$HOME/.bun/bin" >> $CM_PATHS_FILE
+      - name: Install dependencies
+        script: bun install
+      - name: Build web app
+        script: bun run build
+      - name: Add Android platform
+        script: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          bunx cap add android || true
+      - name: Sync Capacitor
+        script: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          bunx cap sync android
+      - name: Build APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com # <-- replace with your email to get the APK link
+
+  android-release:
+    name: Android release (signed)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      groups:
+        - node
+      vars:
+        BUN_VERSION: "1.2.0"
+      node: 20
+      android_signing:
+        # Configure these in Codemagic UI (Teams > Code signing identities):
+        # upload your keystore and reference it here, e.g.:
+        # - spok_release
+      bun: latest
+    scripts:
+      - name: Install dependencies
+        script: bun install
+      - name: Build web app
+        script: bun run build
+      - name: Add + sync Android platform
+        script: |
+          bunx cap add android || true
+          bunx cap sync android
+      - name: Build signed App Bundle
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
