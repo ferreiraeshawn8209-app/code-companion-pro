@@ -1,46 +1,36 @@
 workflows:
-android-apk-debug:
-name: Spok Android APK
-instance_type: linux_x2
-max_build_duration: 60
-
-```
-environment:
-  node: 20
-
-scripts:
-  - name: Install Bun
-    script: |
-      curl -fsSL https://bun.sh/install | bash
-      export PATH="$HOME/.bun/bin:$PATH"
-      echo "$HOME/.bun/bin" >> $CM_PATHS_FILE
-
-  - name: Install dependencies
-    script: |
-      export PATH="$HOME/.bun/bin:$PATH"
-      bun install
-
-  - name: Build web app
-    script: |
-      export PATH="$HOME/.bun/bin:$PATH"
-      bun run build
-
-  - name: Add Android platform
-    script: |
-      export PATH="$HOME/.bun/bin:$PATH"
-      bunx cap add android || true
-
-  - name: Sync Capacitor
-    script: |
-      export PATH="$HOME/.bun/bin:$PATH"
-      bunx cap sync android
-
-  - name: Build APK
-    script: |
-      cd android
-      chmod +x gradlew
-      ./gradlew assembleDebug
-
-artifacts:
-  - android/app/build/outputs/apk/debug/*.apk
-```
+  android-apk-debug:
+    name: Spok Android APK
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      node: 20
+    scripts:
+      - name: Install Bun
+        script: |
+          curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
+          echo "$HOME/.bun/bin" >> $CM_PATHS_FILE
+      - name: Install dependencies
+        script: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun install
+      - name: Build web app
+        script: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          bun run build
+      - name: Add Android platform
+        script: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          bunx cap add android || true
+      - name: Sync Capacitor
+        script: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          bunx cap sync android
+      - name: Build APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
