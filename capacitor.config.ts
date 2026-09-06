@@ -17,8 +17,14 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "green.codex.spok",
   appName: "spok",
-  webDir: "dist",
+  webDir: "mobile-www",
   bundledWebRuntime: false,
+  // Live mode: the native shell loads the published app so server-powered
+  // features (AI chat, voice, auth) work fully. Requires internet.
+  server: {
+    url: "https://anyagentcode.lovable.app",
+    cleartext: false,
+  },
   android: {
     allowMixedContent: false,
   },
