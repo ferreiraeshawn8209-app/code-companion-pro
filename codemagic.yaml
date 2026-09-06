@@ -1,7 +1,9 @@
 workflows:
   android-apk-debug:
     name: Spok Android APK
-    instance_type: linux
+    # Codemagic's individual free allowance applies to macOS M2 builds.
+    # Linux builders require billing to be enabled.
+    instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       node: 20

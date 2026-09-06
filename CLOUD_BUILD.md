@@ -6,7 +6,9 @@ APK for you in the cloud. Your computer never needs the Android SDK.
 ## One-time setup (about 5 minutes)
 
 1. **Push this project to GitHub** (from the app, or `git push`).
-2. Go to **codemagic.io** → "Sign up with GitHub" (the free plan is enough).
+2. Go to **codemagic.io** → "Sign up with GitHub". The workflow uses the
+   macOS M2 machine covered by Codemagic's individual free-minute allowance;
+   Linux builders require billing to be enabled.
 3. Click **Add application** and pick this repository.
 4. When asked for the build configuration, choose **codemagic.yaml**.
 
