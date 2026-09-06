@@ -19,6 +19,12 @@ const config: CapacitorConfig = {
   appName: "spok",
   webDir: "dist/client",
   bundledWebRuntime: false,
+  // Live mode: the native shell loads the published app so server-powered
+  // features (AI chat, voice, auth) work fully. Requires internet.
+  server: {
+    url: "https://anyagentcode.lovable.app",
+    cleartext: false,
+  },
   android: {
     allowMixedContent: false,
   },
