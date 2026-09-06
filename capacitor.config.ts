@@ -17,7 +17,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "green.codex.spok",
   appName: "spok",
-  webDir: "dist",
+  webDir: "dist/client",
   bundledWebRuntime: false,
   android: {
     allowMixedContent: false,
