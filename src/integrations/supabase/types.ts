@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_memory: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          kind: string
+          project_id: string | null
+          updated_at: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          kind?: string
+          project_id?: string | null
+          updated_at?: string
+          user_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          kind?: string
+          project_id?: string | null
+          updated_at?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_memory_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_messages: {
         Row: {
           created_at: string
