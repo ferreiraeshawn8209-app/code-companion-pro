@@ -7,26 +7,38 @@ import { createLovableAiGatewayProvider, getLovableAiGatewayRunId } from "@/lib/
 
 const SYSTEM_PROMPT = `You are spok, an autonomous AI software engineering agent embedded in a coding-agent web app.
 
-Mission: help the user ship production-ready software. You are AUTONOMOUS — don't just advise, act. You have real tools to inspect and modify the project's files.
+Mission: help the user ship production-ready software end to end — read the repo, write the code, commit it, open and merge pull requests, and deploy it. You are AUTONOMOUS: don't just advise, act. You have real tools.
 
 How you work:
 - Start by using your tools: list_files to see the workspace, read_file / search_files to understand code before changing it. Never guess file contents.
 - When asked to build, fix, or improve something: make the edits yourself with write_file — create, update, and repair files directly. Then summarize what you changed and why.
-- Work in loops: read → plan → edit → re-read to verify → report. Chain as many tool calls as the task needs.
-- Actively hunt for bugs, security issues, dead code, and UX friction. Fix small obvious faults on sight (report them); ask before destructive actions (deleting files, large rewrites).
-- Be creative in design — distinctive visual direction (color, type, layout, motion) over generic scaffolding. Reject default AI aesthetics unless requested.
-- Prefer TypeScript, React, Tailwind, and semantic design tokens over raw hex colors.
-- Never fabricate library APIs. If unsure of a file's current state, read it again.
+- Work in loops: read → plan → edit → re-read to verify → ship → report. Chain as many tool calls as the task needs.
+- Actively hunt for bugs, security issues, dead code, and UX friction. Fix small obvious faults on sight (report them); ask before destructive actions (deleting files, force pushes, production deploys the user didn't ask for).
+- Be creative in design — distinctive visual direction (color, type, layout, motion) over generic scaffolding.
+- Prefer TypeScript, React, Tailwind, and semantic design tokens over raw hex colors. Never fabricate library APIs.
+
+Repo, git and shipping:
+- github_list_repos + github_import_repo load a repository into the workspace. Do this yourself when the user names a repo — don't tell them to click a button.
+- After making changes: github_commit to a working branch (create it implicitly by committing to a new branch name), then github_open_pr, then github_merge_pr when the user approves or explicitly asked you to merge.
+- Commit straight to the default branch only when the user asked for that.
+- vercel_deploy ships the workspace; default to target "preview" and use "production" only when asked. Poll vercel_deployment_status until it is READY or ERROR, and report the live URL.
+- If a GitHub tool returns a 401 / "Bad credentials" error, stop and tell the user to reconnect GitHub in Settings → Connectors — no other tool can work around it.
+
+Learning (long-term memory):
+- You have persistent memory across sessions. remember_fact stores durable knowledge: the user's preferences, stack conventions, repo names, app ids, deploy targets, recurring mistakes and their fixes, decisions you agreed on.
+- Save a memory whenever the user states a preference, corrects you, rejects an approach, or you discover something about the project worth reusing. Don't ask permission — just save it and mention it in one short line.
+- recall_facts searches memory when you need context you weren't given. forget_fact removes memory that is now wrong.
+- Never re-propose something stored as a rejected approach.
 
 Mobile conversion:
-- If the user asks to make the app Android/iOS compatible, run make_mobile_ready (pick a sensible appId like app.spok.<project-slug> and appName; default mode "bundled" unless they want live-reload), then export_android_project so a download button appears in chat.
-- Explain in one short list what they do next: unzip, run setup-android.sh, Android Studio opens the native project. iOS needs a Mac + Xcode via cap:build:ios.
+- If the user asks to make the app Android/iOS compatible, run make_mobile_ready (sensible appId like app.spok.<project-slug>; default mode "bundled"), then export_android_project so a download button appears in chat.
 
 Proactive advisory duty (always on):
 - End EVERY substantive reply with a "## suggestions" section: 2-5 concrete, prioritized items tagged [fix], [perf], [security], [ux], or [feature], naming the files involved.
 - Flag faults you notice even when unrelated to the current question. Say "no issues found" when an area is genuinely clean.
 
-Keep replies scannable: short bullets, concrete next steps, what you changed, what you recommend next.`;
+Keep replies scannable: short bullets, concrete next steps, what you changed, what you shipped, what you recommend next.`;
+
 
 type ChatBody = {
   messages?: UIMessage[];
@@ -256,7 +268,205 @@ function buildTools(supabase: ReturnType<typeof makeUserClient>, projectId: stri
         };
       },
     }),
+
+    /* ---------------- GitHub ---------------- */
+
+    github_list_repos: tool({
+      description: "List the GitHub repositories the connected account can access.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          return { repos: await ops.listRepos() };
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    github_import_repo: tool({
+      description:
+        "Import a GitHub repository's text files into the current project workspace so you can read and edit them. Use when the user names a repo.",
+      inputSchema: z.object({
+        fullName: z.string().describe("owner/repo"),
+        branch: z.string().nullable().describe("branch to import, or null for the default branch"),
+      }),
+      execute: async ({ fullName, branch }) => {
+        const pid = needProject();
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          return await ops.importRepo(supabase, pid, userId, fullName, branch);
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    github_commit: tool({
+      description:
+        "Commit the workspace (or specific paths) to a GitHub branch. Creates the branch off the default branch if it does not exist. Use after making edits.",
+      inputSchema: z.object({
+        fullName: z.string().describe("owner/repo"),
+        branch: z.string().describe("branch to commit to, e.g. spok/fix-auth"),
+        message: z.string().describe("commit message"),
+        paths: z.array(z.string()).nullable().describe("limit the commit to these workspace paths, or null for all files"),
+      }),
+      execute: async ({ fullName, branch, message, paths }) => {
+        const pid = needProject();
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          return await ops.commitWorkspace(supabase, pid, userId, fullName, branch, message, paths);
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    github_open_pr: tool({
+      description: "Open a pull request from a branch into the base branch.",
+      inputSchema: z.object({
+        fullName: z.string(),
+        head: z.string().describe("branch containing the changes"),
+        base: z.string().nullable().describe("target branch, or null for the default branch"),
+        title: z.string(),
+        body: z.string().describe("markdown description of what changed and why"),
+      }),
+      execute: async ({ fullName, head, base, title, body }) => {
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          const pr = await ops.openPullRequest(fullName, head, title, body, base);
+          await audit("ai.github_open_pr", `${fullName}#${pr.number}`, { title, head });
+          return pr;
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    github_list_prs: tool({
+      description: "List open pull requests on a repository.",
+      inputSchema: z.object({ fullName: z.string() }),
+      execute: async ({ fullName }) => {
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          return { pulls: await ops.listPullRequests(fullName) };
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    github_merge_pr: tool({
+      description:
+        "Merge a pull request. Only do this when the user asked you to merge or already approved the change.",
+      inputSchema: z.object({
+        fullName: z.string(),
+        number: z.number(),
+        method: z.enum(["merge", "squash", "rebase"]),
+      }),
+      execute: async ({ fullName, number, method }) => {
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          const res = await ops.mergePullRequest(fullName, number, method);
+          await audit("ai.github_merge_pr", `${fullName}#${number}`, { method, merged: res.merged });
+          return res;
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    /* ---------------- Deploy ---------------- */
+
+    vercel_deploy: tool({
+      description:
+        "Deploy the current workspace to Vercel. Use target 'preview' unless the user asked for production. Requires a linked Vercel project.",
+      inputSchema: z.object({ target: z.enum(["preview", "production"]) }),
+      execute: async ({ target }) => {
+        const pid = needProject();
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          return await ops.deployWorkspace(supabase, pid, userId, target);
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    vercel_deployment_status: tool({
+      description: "Check whether a Vercel deployment is READY, BUILDING or ERROR. Poll after vercel_deploy.",
+      inputSchema: z.object({ deploymentId: z.string() }),
+      execute: async ({ deploymentId }) => {
+        const ops = await import("@/lib/agent-ops.server");
+        try {
+          return await ops.deploymentStatus(deploymentId);
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    /* ---------------- Learning ---------------- */
+
+    remember_fact: tool({
+      description:
+        "Save durable knowledge to long-term memory: user preferences, conventions, repo names, decisions, rejected approaches, recurring fixes. Reusing the same key overwrites it.",
+      inputSchema: z.object({
+        key: z.string().describe("short stable slug, e.g. 'preferred-branch-prefix'"),
+        value: z.string().describe("the fact, written so a future session can act on it"),
+        kind: z.enum(["preference", "constraint", "convention", "fact", "fix"]),
+        scope: z.enum(["project", "global"]).describe("project = this workspace only; global = all the user's projects"),
+      }),
+      execute: async ({ key, value, kind, scope }) => {
+        const scopedProject = scope === "project" ? needProject() : null;
+        const { error } = await supabase.from("agent_memory").upsert(
+          {
+            user_id: userId,
+            project_id: scopedProject,
+            key,
+            value,
+            kind,
+            updated_at: new Date().toISOString(),
+          } as never,
+          { onConflict: scopedProject ? "user_id,project_id,key" : "user_id,key" },
+        );
+        if (error) return { error: error.message };
+        return { saved: true, key, kind, scope };
+      },
+    }),
+
+    recall_facts: tool({
+      description: "Search long-term memory for previously learned facts about this user or project.",
+      inputSchema: z.object({ query: z.string().nullable().describe("text to match, or null for everything") }),
+      execute: async ({ query }) => {
+        let q = supabase
+          .from("agent_memory")
+          .select("key, value, kind, project_id, updated_at")
+          .eq("user_id", userId)
+          .order("updated_at", { ascending: false })
+          .limit(50);
+        if (query) q = q.or(`key.ilike.%${query}%,value.ilike.%${query}%`);
+        const { data, error } = await q;
+        if (error) return { error: error.message };
+        return { memories: data ?? [], count: data?.length ?? 0 };
+      },
+    }),
+
+    forget_fact: tool({
+      description: "Delete a memory that is now wrong or obsolete.",
+      inputSchema: z.object({ key: z.string() }),
+      execute: async ({ key }) => {
+        const { error } = await supabase
+          .from("agent_memory")
+          .delete()
+          .eq("user_id", userId)
+          .eq("key", key);
+        if (error) return { error: error.message };
+        return { forgotten: key };
+      },
+    }),
   };
+
 }
 
 
