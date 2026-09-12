@@ -513,6 +513,45 @@ export const Route = createFileRoute("/api/chat")({
           }
         }
 
+        // --- long-term memory: everything global + everything for this project ---
+        {
+          let memQuery = supabase
+            .from("agent_memory")
+            .select("key, value, kind, project_id")
+            .eq("user_id", userId)
+            .order("updated_at", { ascending: false })
+            .limit(60);
+          memQuery = body.projectId
+            ? memQuery.or(`project_id.is.null,project_id.eq.${body.projectId}`)
+            : memQuery.is("project_id", null);
+          const { data: memories } = await memQuery;
+          if (memories?.length) {
+            const lines = memories
+              .map((m) => `- [${m.kind}${m.project_id ? "" : "/global"}] ${m.key}: ${m.value}`)
+              .join("\n");
+            contextBits.push(
+              `\nLearned memory (apply these automatically; never re-propose a rejected approach):\n${lines}`,
+            );
+          }
+        }
+
+        // --- repo currently linked to this project ---
+        if (body.projectId) {
+          const { data: proj } = await supabase
+            .from("projects")
+            .select("github_repo_full_name, vercel_project_name")
+            .eq("id", body.projectId)
+            .maybeSingle();
+          if (proj?.github_repo_full_name) {
+            contextBits.push(`\nLinked GitHub repo: ${proj.github_repo_full_name} (use it for commits and PRs).`);
+          }
+          if (proj?.vercel_project_name) {
+            contextBits.push(`Linked Vercel project: ${proj.vercel_project_name}.`);
+          }
+        }
+
+
+
         try {
           const result = streamText({
             model,
