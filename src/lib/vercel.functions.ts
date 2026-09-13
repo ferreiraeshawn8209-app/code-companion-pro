@@ -291,3 +291,25 @@ export const listProjectDeployments = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
+
+/** Disable Vercel Authentication (deployment protection) so the app is publicly reachable. */
+export const disableVercelProtection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { projectId: string; teamId?: string }) =>
+    z.object({ projectId: z.string().uuid(), teamId: z.string().optional() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId, data.projectId);
+    const { data: proj, error } = await context.supabase
+      .from("projects")
+      .select("vercel_project_name")
+      .eq("id", data.projectId)
+      .maybeSingle();
+    if (error || !proj?.vercel_project_name) throw new Error("no vercel project linked");
+    await vercel(
+      `/v9/projects/${encodeURIComponent(proj.vercel_project_name)}`,
+      { method: "PATCH", body: JSON.stringify({ ssoProtection: null }) },
+      data.teamId,
+    );
+    return { ok: true, project: proj.vercel_project_name };
+  });

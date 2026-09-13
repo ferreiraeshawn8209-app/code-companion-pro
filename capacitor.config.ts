@@ -22,7 +22,7 @@ const config: CapacitorConfig = {
   // Live mode: the native shell loads the published app so server-powered
   // features (AI chat, voice, auth) work fully. Requires internet.
   server: {
-    url: "https://anyagentcode.lovable.app",
+    url: "https://keypilot-c5525zdxh-beatkulture.vercel.app",
     cleartext: false,
   },
   android: {

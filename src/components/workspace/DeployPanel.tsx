@@ -7,6 +7,7 @@ import {
   createVercelProject,
   linkVercelProject,
   deployToVercel,
+  disableVercelProtection,
   getDeploymentStatus,
   getDeploymentEvents,
   listProjectDeployments,
@@ -48,6 +49,7 @@ export function DeployPanel({ projectId, projectName, vercelProjectName, onLinke
   const createProject = useServerFn(createVercelProject);
   const linkProject = useServerFn(linkVercelProject);
   const deploy = useServerFn(deployToVercel);
+  const disableProtection = useServerFn(disableVercelProtection);
   const status = useServerFn(getDeploymentStatus);
   const events = useServerFn(getDeploymentEvents);
   const listDeps = useServerFn(listProjectDeployments);
@@ -194,6 +196,19 @@ export function DeployPanel({ projectId, projectName, vercelProjectName, onLinke
         {linked ? (
           <div className="font-mono text-xs flex items-center gap-2">
             <Badge variant="outline" className="font-mono border-primary/40 text-primary">{linked}</Badge>
+            <button
+              className="text-muted-foreground underline hover:text-foreground"
+              onClick={async () => {
+                try {
+                  await disableProtection({ data: { projectId, teamId } });
+                  toast.success("deployments are public — no vercel login required");
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+              }}
+            >
+              make public
+            </button>
             <button className="text-muted-foreground underline hover:text-foreground" onClick={() => setLinked(null)}>change</button>
           </div>
         ) : (
