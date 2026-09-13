@@ -2,9 +2,26 @@ name: android-apk
 
 # Free APK builds — GitHub Actions is free for public repos (and includes
 # monthly free minutes for private repos). No paid builders needed.
+#
+# Two outputs:
+#   - app-debug.apk   — always built, installable on your own phone
+#   - app-release.apk — signed, Play-Store-ready, built only when the four
+#                       signing secrets below are configured
+#
+# One-time signing setup (see SIGNING.md for details):
+#   keytool -genkeypair -v -keystore upload-keystore.jks -alias upload \
+#     -keyalg RSA -keysize 2048 -validity 10000
+#   base64 -w0 upload-keystore.jks   # copy the output
+# Then add these repo secrets (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64  — the base64 output above
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS        — e.g. "upload"
+#   ANDROID_KEY_PASSWORD
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   build-apk:
@@ -21,18 +38,47 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
       - name: Install dependencies
-        run: npm install
+        run: bun install
+
+      - name: Build web app
+        run: bun run build
 
       - name: Sync Capacitor web assets
-        run: npx cap sync android
+        run: bunx cap sync android
 
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Decode release keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
+
+      - name: Build signed release APK
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload signed release APK
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
